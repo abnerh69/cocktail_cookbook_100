@@ -1,0 +1,29 @@
+// Flutter 2022 Initialization
+// f2_init
+
+Inicialización de Entorno para "Cocktail Cookbook" (CocktailCookbook)
+
+Variables para TextParser for Axon & Dendritas
+
+Plantillas Dendritas = dendritas
+Plantillas Flutter = flutter
+
+
+FIREBASE_DATABASE  = S
+FIREBASE_ANALITICS = N
+
+
+
+
+PROYECTO     = cocktail_cookbook
+MODULO       = cocktail_cookbook
+VERSIONV     = _100 1.0.0
+FRAMEWORK    = Flutter
+
+BASEDIR      = /Users/abnershernandez/DevTemp/fulltimeforce/
+PROYECTO_DIR = /Users/abnershernandez/DevTemp/fulltimeforce/cocktail_cookbook_100/
+MODULO_DIR   = /Users/abnershernandez/DevTemp/fulltimeforce/cocktail_cookbook_100/lib/
+FUENTES_DIR  = /Users/abnershernandez/DevTemp/fulltimeforce/cocktail_cookbook_100/lib/cocktail_cookbook/
+
+Generado: 2022-12-26 18:45:43
+

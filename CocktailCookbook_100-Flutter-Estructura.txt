@@ -1,0 +1,3 @@
+Estructura del proyecto "Cocktail Cookbook" (CocktailCookbook)
+VERSIONV     = _100 (1.0.0)
+
