@@ -1,3 +1,15 @@
+class DrinkItem {
+  late String idDrink;
+  late String name;
+  late String drinkThumb;
+
+  DrinkItem.fromMap(json) {
+    idDrink = json["idDrink"];
+    name = json["strDrink"];
+    drinkThumb = json["strDrinkThumb"];
+  }
+}
+
 class Drink {
   late String idDrink; // "14446",
   late String name; // "Kool-Aid Slammer",
@@ -56,9 +68,7 @@ class Drink {
   late String dateModified; // "2017-09-06 23  //04  //33"
   Map<String, String> ingredientsList = {};
 
-  getInfo() {
-
-  }
+  getInfo() {}
 
   Drink.fromJson(json) {
     idDrink = json["idDrink"];
@@ -116,8 +126,8 @@ class Drink {
     ingredientsList.clear();
     for (int i = 1; i <= 15; i++) {
       if (json["strIngredient$i"] != null) {
-
-        ingredientsList.putIfAbsent(json["strIngredient$i"].toString(), () => json["strMeasure$i"] ?? '');
+        ingredientsList.putIfAbsent(json["strIngredient$i"].toString(),
+            () => json["strMeasure$i"] ?? '');
       }
     }
   }

@@ -10,5 +10,3 @@ void main() async {
   await RecipeViewModel.load();
   runApp(const RecipeApp());
 }
-
-// https://www.thecocktaildb.com/api.php

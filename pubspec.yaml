@@ -16,6 +16,7 @@ dependencies:
 
   http: ^0.13.5
   string_extensions: ^0.6.6
+  cached_network_image: ^3.2.3
 
 dev_dependencies:
   flutter_test:

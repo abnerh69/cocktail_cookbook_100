@@ -13,6 +13,7 @@ class RecipeApp extends StatelessWidget {
           // accentColor: Colors.white,
           dialogBackgroundColor: Colors.transparent),
       home: const HomePage(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }

@@ -1,9 +1,17 @@
 import 'dart:convert';
 
+import 'package:cocktail_cookbook/pages/home_page.dart';
+import 'package:cocktail_cookbook/pages/widgets/_exports.dart';
+import 'package:cocktail_cookbook/pages/widgets/w_clear_search_button.dart';
+import 'package:cocktail_cookbook/pages/widgets/w_home_overlaping.dart';
+import 'package:cocktail_cookbook/the_data_db_api/search_result.dart';
+import 'package:cocktail_cookbook/utils/refresh_widget.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:string_extensions/string_extensions.dart';
 
+import 'package:cocktail_cookbook/dim.dart';
 import '_exports.dart';
 
 class TheCocktailCookbookData {
@@ -12,6 +20,14 @@ class TheCocktailCookbookData {
   String apiBaseUrl = 'https://www.thecocktaildb.com/api/json';
   String drinks = 'drinks';
 
+  Map<String, Drink> drinksMap = {};
+
+  static const cCategories = "Categories";
+  static const cGlasses = "Glasses";
+  static const cIngredients = "Ingredients";
+  static const cAlcoholic = "Alcoholic";
+
+  bool lInitialized = false;
   List<DrinkCategory> categories = [];
   List<Glass> glasses = [];
   List<Ingredient> ingredients = [];
@@ -19,6 +35,82 @@ class TheCocktailCookbookData {
   bool lTheFilters = false;
   bool lTheFiltersGotten = false;
   List<TheCocktailDBEndpoint> endPointsList = [];
+
+  Drink? randomDrink;
+  bool lRandomDrink = false;
+  List<DrinkItem> drinkItemsList = [];
+
+  TextEditingController searchController = TextEditingController();
+
+  List<SearchResult> searchResult = [];
+
+  String coctailsFilterTitle = '';
+
+  searchListener() async {
+    String textToSearch = searchController.text;
+    searchResult.clear();
+    refreshWidget(WSearchClearButton.widgetName);
+    if (textToSearch == '') {
+      refreshWidget(WSearchResults.widgetName);
+      return;
+    }
+    if (textToSearch.length == 1) {
+      // listAllCocktailsByFirstLetter(textToSearch);
+    }
+    if (textToSearch.length >= 3) {
+      List<Drink> aDrinklist = await searchCocktailByName(textToSearch);
+      if (aDrinklist.isNotEmpty) {
+        searchResult.insert(0, SearchResult('T', 'Drinks'));
+        List<SearchResult> tempList = [];
+        for (var element in aDrinklist) {
+          tempList.add(SearchResult('Drink', element.name, idDrink: element.idDrink));
+        }
+        searchResult.insertAll(1, tempList);
+      }
+    }
+    List<DrinkCategory> searchDrinkCategory = categories
+        .where((element) =>
+            element.name.toLowerCase().contains(textToSearch.toLowerCase()))
+        .toList();
+    List<Alcoholic> searchAlcoholic = alcoholic
+        .where((element) =>
+            element.name.toLowerCase().contains(textToSearch.toLowerCase()))
+        .toList();
+    List<Glass> searchGlass = glasses
+        .where((element) =>
+            element.name.toLowerCase().contains(textToSearch.toLowerCase()))
+        .toList();
+    List<Ingredient> searchIngredient = ingredients
+        .where((element) =>
+            element.name.toLowerCase().contains(textToSearch.toLowerCase()))
+        .toList();
+    if (searchDrinkCategory.isNotEmpty) {
+      searchResult.add(SearchResult('T', cCategories));
+      for (var element in searchDrinkCategory) {
+        searchResult.add(SearchResult(cCategories, element.name));
+      }
+    }
+    if (searchAlcoholic.isNotEmpty) {
+      searchResult.add(SearchResult('T', cAlcoholic));
+      for (var element in searchAlcoholic) {
+        searchResult.add(SearchResult(cAlcoholic, element.name));
+      }
+    }
+    if (searchGlass.isNotEmpty) {
+      searchResult.add(SearchResult('T', cGlasses));
+      for (var element in searchGlass) {
+        searchResult.add(SearchResult(cGlasses, element.name));
+      }
+    }
+    if (searchIngredient.isNotEmpty) {
+      searchResult.add(SearchResult('T', cIngredients));
+      for (var element in searchIngredient) {
+        searchResult.add(SearchResult(cIngredients, element.name));
+      }
+    }
+    refreshWidget(WSearchResults.widgetName);
+    // debugPrint(searchResult.toString());
+  }
 
   setMyVersionAndKey(String newVersion, String newKey) {
     theVersion = newVersion;
@@ -34,7 +126,7 @@ class TheCocktailCookbookData {
 
   temporalUtil() {
     for (var element in endPointsList) {
-      debugPrint('${element.usedFor} -> ${title2ClassName(element.usedFor)}');
+      // debugPrint('${element.usedFor} -> ${title2ClassName(element.usedFor)}');
     }
   }
 
@@ -43,7 +135,7 @@ class TheCocktailCookbookData {
   }
 
   Future<Map> fetchTheCocktailDBEndpointData(String name,
-      {String arguemt = ''}) async {
+      {String argument = ''}) async {
     Map map = {};
     final tempList =
         endPointsList.where((element) => element.name == name).toList();
@@ -58,81 +150,104 @@ class TheCocktailCookbookData {
     }
     url = url.replaceAll('VERSION', theVersion).replaceAll('KEY', theKey);
     if (ep.requieresArgument) {
-      url.replaceAll('ARGUMENT', arguemt);
+      url = url.replaceAll('ARGUMENT', argument.replaceAll(' ', '_'));
     }
 
     http.Response response = await fetchResponse(url);
     if (response.statusCode == 200) {
-      map = json.decode(response.body);
+      try {
+        map = json.decode(response.body);
+      } catch (e) {
+        // debugPrint(e.toString());
+        // debugPrint(url);
+        // debugPrint(response.body);
+      }
     }
     return map;
   }
 
   // Search cocktail by name
-  searchCocktailByName(String name) async {
+  Future<List<Drink>> searchCocktailByName(String name) async {
     Map map = await fetchTheCocktailDBEndpointData("searchCocktailByName",
-        arguemt: name);
-    debugPrint(map.toString());
-    // ep.
+        argument: name);
+    // debugPrint(map.toString());
+    return getDrinksFromMap(map);
   }
 
   // List all cocktails by first letter
   listAllCocktailsByFirstLetter(String firstLetter) async {
-    Map map = await fetchTheCocktailDBEndpointData("listAllCocktailsByFirstLetter",
-        arguemt: firstLetter);
-    debugPrint(map.toString());
+    Map map = await fetchTheCocktailDBEndpointData(
+        "listAllCocktailsByFirstLetter",
+        argument: firstLetter);
+    // debugPrint(map.toString());
   }
 
   // Search ingredient by name
   searchIngredientByName(String name) async {
     Map map = await fetchTheCocktailDBEndpointData("searchIngredientByName",
-        arguemt: name);
-    debugPrint(map.toString());
+        argument: name);
+    // debugPrint(map.toString());
   }
 
   // Lookup full cocktail details by id
   lookupFullCocktailDetailsById(String id) async {
-    Map map = await fetchTheCocktailDBEndpointData("lookupFullCocktailDetailsById",
-        arguemt: id);
-    debugPrint(map.toString());
+    if (drinksMap.containsKey(id)) {
+      newRandomDrink(drinksMap[id]!);
+      return;
+    }
+    Map map = await fetchTheCocktailDBEndpointData(
+        "lookupFullCocktailDetailsById",
+        argument: id);
+    // debugPrint(map.toString());
+    List<Drink> list = getDrinksFromMap(map);
+    if (list.isNotEmpty) {
+      newRandomDrink(list[0]);
+    }
+  }
+
+  List<Drink> getDrinksFromMap(Map map) {
+    List<Drink> resultList = [];
+    if (map.containsKey(drinks)) {
+      List list = map[drinks];
+      if (list.isNotEmpty) {
+        Drink aDrink = Drink.fromJson(list[0]);
+        resultList.add(aDrink);
+        drinksMap.putIfAbsent(aDrink.idDrink, () => aDrink);
+        // debugPrint(drinksMap.length.toString());
+      }
+    }
+    return resultList;
   }
 
   // Lookup ingredient by ID
   lookupIngredientById(String id) async {
     Map map = await fetchTheCocktailDBEndpointData("lookupIngredientById",
-        arguemt: id);
-    debugPrint(map.toString());
+        argument: id);
+    // debugPrint(map.toString());
   }
 
   // Lookup a random cocktail
   lookupARandomCocktail() async {
     Map map = await fetchTheCocktailDBEndpointData("lookupARandomCocktail");
-    // debugPrint(map.toString());
-    if (map.containsKey(drinks)) {
-      List list = map[drinks];
-      if (list.isNotEmpty) {
-
-        randomDrink = Drink.fromJson(list[0]);
-        lRandomDrink = true;
-        // TODO: Refesh Home Page
-        // debugPrint(randomDrink!.drinkThumb);
-      }
+    List<Drink> list = getDrinksFromMap(map);
+    if (list.isNotEmpty) {
+      newRandomDrink(list[0]);
+      coctailsFilterTitle = randomDrink!.category;
+      filterByCategory(randomDrink!.category);
     }
   }
 
-  Drink? randomDrink;
-  bool lRandomDrink = false;
-
   // Lookup a selection of 10 random cocktails
   lookupASelectionOf10RandomCocktails() async {
-    Map map = await fetchTheCocktailDBEndpointData("lookupASelectionOf10RandomCocktails");
-    debugPrint(map.toString());
+    Map map = await fetchTheCocktailDBEndpointData(
+        "lookupASelectionOf10RandomCocktails");
+    // debugPrint(map.toString());
   }
 
   // List Popular cocktails
   listPopularCocktails() async {
     Map map = await fetchTheCocktailDBEndpointData("listPopularCocktails");
-    debugPrint(map.toString());
+    // debugPrint(map.toString());
   }
 
   // List most latest cocktails
@@ -140,51 +255,60 @@ class TheCocktailCookbookData {
     Map map = await fetchTheCocktailDBEndpointData(
       "listMostLatestCocktails",
     );
-    debugPrint(map.toString());
+    // debugPrint(map.toString());
   }
 
   // Search by ingredient
-  searchByIngredient(String ingredientName) async {
-    Map map = await fetchTheCocktailDBEndpointData("searchByIngredient");
-    debugPrint(map.toString());
+  searchByIngredient(String ingredientName, {bool setDrink = false}) async {
+    Map map = await fetchTheCocktailDBEndpointData("searchByIngredient", argument: ingredientName);
+    // debugPrint(map.toString());
+    getDrinkItemsListFromMap(map);
   }
 
   // Filter by multi-ingredient
   filterByMultiIngredient(List<String> multiIngredientNames) async {
     String argument = multiIngredientNames.join(',');
     Map map = await fetchTheCocktailDBEndpointData("filterByMultiIngredient",
-        arguemt: argument);
-    debugPrint(map.toString());
+        argument: argument);
+    // debugPrint(map.toString());
+    getDrinkItemsListFromMap(map);
   }
 
   // Filter by alcoholic
-  filterByAlcoholic(String alcoholic) async {
+  filterByAlcoholic(String alcoholic, {bool setDrink = false}) async {
     Map map = await fetchTheCocktailDBEndpointData("filterByAlcoholic",
-        arguemt: alcoholic);
-    debugPrint(map.toString());
+        argument: alcoholic);
+    // debugPrint(map.toString());
+    getDrinkItemsListFromMap(map);
   }
 
   // Filter by Category
-  filterByCategory(String category) async {
+  filterByCategory(String category, {bool setDrink = false}) async {
     Map map = await fetchTheCocktailDBEndpointData("filterByCategory",
-        arguemt: category);
-    debugPrint(map.toString());
+        argument: category);
+    getDrinkItemsListFromMap(map);
   }
 
   // Filter by Glass
-  filterByGlass(String glass) async {
-    Map map = await fetchTheCocktailDBEndpointData("filterByGlass",
-        arguemt: glass);
-    debugPrint(map.toString());
+  filterByGlass(String glass, {bool setDrink = false}) async {
+    Map map =
+        await fetchTheCocktailDBEndpointData("filterByGlass", argument: glass);
+    // debugPrint(map.toString());
+    getDrinkItemsListFromMap(map);
   }
 
   initAPIEndpoints() {
+    if (lInitialized) {
+      return;
+    }
+    lInitialized = true;
+    searchController.addListener(searchListener);
+
     endPointsList = [
       TheCocktailDBEndpoint(
         name: "searchCocktailByName",
         usedFor: "Search cocktail by name",
-        url:
-            "$apiBaseUrl/VERSION/KEY/search.php?s=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/search.php?s=ARGUMENT",
         requieresArgument: true,
         function: searchCocktailByName,
       ),
@@ -192,8 +316,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "listAllCocktailsByFirstLetter",
         usedFor: "List all cocktails by first letter",
-        url:
-            "$apiBaseUrl/VERSION/KEY/search.php?f=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/search.php?f=ARGUMENT",
         requieresArgument: true,
         function: listAllCocktailsByFirstLetter,
       ),
@@ -201,8 +324,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "searchIngredientByName",
         usedFor: "Search ingredient by name",
-        url:
-            "$apiBaseUrl/VERSION/KEY/search.php?i=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/search.php?i=ARGUMENT",
         requieresArgument: true,
         function: searchIngredientByName,
       ),
@@ -210,8 +332,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: 'lookupFullCocktailDetailsById',
         usedFor: "Lookup full cocktail details by id",
-        url:
-            "$apiBaseUrl/VERSION/KEY/lookup.php?i=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/lookup.php?i=ARGUMENT",
         requieresArgument: true,
         function: lookupFullCocktailDetailsById,
       ),
@@ -219,8 +340,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "lookupIngredientById",
         usedFor: "Lookup ingredient by ID",
-        url:
-            "$apiBaseUrl/VERSION/KEY/lookup.php?iid=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/lookup.php?iid=ARGUMENT",
         requieresArgument: true,
         function: lookupIngredientById,
       ),
@@ -236,8 +356,7 @@ class TheCocktailCookbookData {
         name: "lookupASelectionOf10RandomCocktails",
         usedFor: "Lookup a selection of 10 random cocktails",
         requieresPay: true,
-        url:
-            "$apiBaseUrl/VERSION/KEY/randomselection.php",
+        url: "$apiBaseUrl/VERSION/KEY/randomselection.php",
         function: lookupASelectionOf10RandomCocktails,
       ),
 
@@ -260,8 +379,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "searchByIngredient",
         usedFor: "Search by ingredient",
-        url:
-            "$apiBaseUrl/VERSION/KEY/filter.php?i=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/filter.php?i=ARGUMENT",
         requieresArgument: true,
         function: searchByIngredient,
       ),
@@ -279,8 +397,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "filterByAlcoholic",
         usedFor: "Filter by alcoholic",
-        url:
-            "$apiBaseUrl/VERSION/KEY/filter.php?a=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/filter.php?a=ARGUMENT",
         requieresArgument: true,
         function: filterByAlcoholic,
       ),
@@ -289,8 +406,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
           name: "filterByCategory",
           usedFor: "Filter by Category",
-          url:
-              "$apiBaseUrl/VERSION/KEY/filter.php?c=ARGUMENT",
+          url: "$apiBaseUrl/VERSION/KEY/filter.php?c=ARGUMENT",
           requieresArgument: true,
           function: filterByCategory),
       // url: "$apiBaseUrl/VERSION/KEY/filter.php?c=Cocktail", ),
@@ -298,8 +414,7 @@ class TheCocktailCookbookData {
       TheCocktailDBEndpoint(
         name: "filterByGlass",
         usedFor: "Filter by Glass",
-        url:
-            "$apiBaseUrl/VERSION/KEY/filter.php?g=ARGUMENT",
+        url: "$apiBaseUrl/VERSION/KEY/filter.php?g=ARGUMENT",
         requieresArgument: true,
         function: filterByGlass,
       ),
@@ -317,38 +432,36 @@ class TheCocktailCookbookData {
     // url: "$apiBaseUrl/VERSION/KEY/list.php?g=list", ),
     // url: "$apiBaseUrl/VERSION/KEY/list.php?i=list", ),
     // url: "$apiBaseUrl/VERSION/KEY/list.php?a=list", ),
-    const cCategories = "Categories";
-    const cGlasses = "Glasses";
-    const cIngredients = "Ingredients";
-    const cAlcoholic = "Alcoholic";
     Map<String, DrinkFilter> theFilters = {
       cCategories: DrinkFilter<DrinkCategory>(
           cCategories,
           "$apiBaseUrl/VERSION/KEY/list.php?c=list",
-          "drinks",
+          drinks,
           "strCategory",
           categories),
       cGlasses: DrinkFilter<Glass>(
           cGlasses,
           "$apiBaseUrl/VERSION/KEY/list.php?g=list",
-          "drinks",
+          drinks,
           "strGlass",
           glasses),
       cIngredients: DrinkFilter<Ingredient>(
           cIngredients,
           "$apiBaseUrl/VERSION/KEY/list.php?i=list",
-          "drinks",
+          drinks,
           "strIngredient1",
           ingredients),
       cAlcoholic: DrinkFilter<Alcoholic>(
           cAlcoholic,
           "$apiBaseUrl/VERSION/KEY/list.php?a=list",
-          "drinks",
+          drinks,
           "strAlcoholic",
           alcoholic),
     };
     theFilters.forEach((key, value) async {
-      http.Response response = await fetchResponse(value.url);
+      http.Response response = await fetchResponse(value.url
+          .replaceAll('VERSION', theVersion)
+          .replaceAll('KEY', theKey));
       if (response.statusCode == 200) {
         Map map = json.decode(response.body);
         if (map.containsKey(value.mainKey)) {
@@ -375,6 +488,9 @@ class TheCocktailCookbookData {
             }
           }
         }
+      } else {
+        // debugPrint(
+        //     '${value.url} -> ${response.statusCode.toString()}\n${response.body}');
       }
     });
   }
@@ -395,4 +511,56 @@ class TheCocktailCookbookData {
     // <img src='https://www.thecocktaildb.com/images/ingredients/gin-Medium.png' width='200' height='200'/>
     // <img src='https://www.thecocktaildb.com/images/ingredients/gin.png' width='350' height='350'/>
     """;
+
+  newRandomDrink(Drink aDrink) {
+    // debugPrint('NEW DRINK TO SHOW ${aDrink.name}');
+    randomDrink = aDrink;
+    lRandomDrink = true;
+    DIM.setDefaultSubViews();
+
+    refreshWidget(WHomeOverlaping.widgetName);
+    refreshWidget(WCocktailImage.widgetName);
+    refreshWidget(WCocktailName.widgetName);
+    // refreshWidget(HomePage .widgetName);
+  }
+
+  searchResultSelected(SearchResult e) {
+    searchController.text = '';
+    switch (e.type) {
+      case cCategories:
+        coctailsFilterTitle = 'Category: ${e.name}';
+        filterByCategory(e.name, setDrink: true);
+        break;
+      case cAlcoholic:
+        coctailsFilterTitle = e.name;
+        filterByAlcoholic(e.name, setDrink: true);
+        break;
+      case cGlasses:
+        coctailsFilterTitle = 'Category: ${e.name}';
+        filterByGlass(e.name, setDrink: true);
+        break;
+      case cIngredients:
+        coctailsFilterTitle = 'Ingredient: ${e.name}';
+        searchByIngredient(e.name, setDrink: true);
+        break;
+      default:
+        // debugPrint('${e.type} -> ${e.name}');
+        newRandomDrink(drinksMap[e.idDrink]!);
+    }
+  }
+
+  getDrinkItemsListFromMap(Map map, {bool setDrink = true}) {
+    if (map.containsKey(drinks)) {
+      drinkItemsList.clear();
+      List list = map[drinks];
+      for (var element in list) {
+        DrinkItem drinkItem = DrinkItem.fromMap(element);
+        drinkItemsList.add(drinkItem);
+      }
+      if (setDrink && drinkItemsList.isNotEmpty) {
+        lookupFullCocktailDetailsById(drinkItemsList[0].idDrink);
+      }
+      refreshWidget(WCocktailList.widgetName);
+    }
+  }
 }
